@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مساعد الطلاب</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    background: #eef2f7;
+    color: #1f2937;
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 640px;
+    min-height: 100vh;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: #2563eb;
+    color: #fff;
+    padding: 16px 20px;
+    font-size: 20px;
+    font-weight: bold;
+  }
+  #chat {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .msg {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.8;
+    font-size: 16px;
+    white-space: pre-wrap;
+  }
+  .bot  { background: #e5e7eb; align-self: flex-start; border-top-right-radius: 4px; }
+  .user { background: #2563eb; color: #fff; align-self: flex-end; border-top-left-radius: 4px; }
+  #questions {
+    border-top: 1px solid #e5e7eb;
+    padding: 12px 16px 16px;
+    background: #f9fafb;
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+  #questions h2 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    color: #6b7280;
+    font-weight: normal;
+  }
+  .q-btn {
+    display: block;
+    width: 100%;
+    text-align: right;
+    margin-bottom: 8px;
+    padding: 12px 14px;
+    font-size: 16px;
+    font-family: inherit;
+    background: #fff;
+    color: #1d4ed8;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .q-btn:hover, .q-btn:active { background: #dbeafe; }
+  #gate {
+    position: fixed;
+    inset: 0;
+    background: rgba(31, 41, 55, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 10;
+  }
+  #gate .box {
+    background: #fff;
+    border-radius: 14px;
+    padding: 24px;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+  #gate h2 { margin: 0 0 8px; font-size: 20px; }
+  #gate p { margin: 0 0 16px; color: #6b7280; font-size: 15px; }
+  #gate input {
+    width: 100%;
+    padding: 12px;
+    font-size: 17px;
+    font-family: inherit;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  #gate button {
+    width: 100%;
+    padding: 12px;
+    font-size: 17px;
+    font-family: inherit;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  #gate .err { color: #dc2626; font-size: 14px; min-height: 18px; margin-bottom: 8px; }
+  #reset {
+    margin-top: 4px;
+    background: none;
+    border: none;
+    color: #6b7280;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="box">
+    <h2>أهلًا بيك 👋</h2>
+    <p>اكتب اسمك علشان تبدأ</p>
+    <input id="nameInput" type="text" maxlength="60" placeholder="الاسم بالكامل" autocomplete="name">
+    <div class="err" id="nameErr"></div>
+    <button id="nameBtn">ابدأ</button>
+  </div>
+</div>
+
+<div class="app">
+  <header id="title"></header>
+  <div id="chat"></div>
+  <div id="questions">
+    <h2>اختاري سؤالك:</h2>
+    <div id="buttons"></div>
+    <button id="reset">مسح المحادثة</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   الجزء ده الوحيد اللي بتعدلي فيه
+   ============================================================ */
+
+// عنوان الصفحة
+const TITLE = "مساعد الطلاب";
+
+// رسالة الترحيب
+const WELCOME = "أهلًا بيك! اختار السؤال اللي عايز تعرف إجابته من القائمة تحت 👇";
+
+// طلب اسم الطالب قبل الدخول (true = مطلوب، false = البوت يفتح مباشرة)
+const ASK_NAME = true;
+
+// رابط جوجل شيت اللي بيسجل الأسماء (هتحصلي عليه من الخطوات)
+// سيبيه فاضي "" لو لسه معملتيش الربط
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzy70-4W91dYbi2r9ocl9-gEma43GzuBJUeoFA7eArCQuoV35tpcaihtmFbXSvYfYol/exec";
+
+// الأسئلة والأجوبة
+// لإضافة سؤال جديد: انسخي سطر كامل (من { لحد },) وحطيه تحت آخر سطر وغيري الكلام.
+// خلي بالك من العلامات " " والفاصلة , في آخر كل سطر.
+const FAQ = [
+  { q: "امتى موعد الامتحان؟",
+    a: "الامتحان يوم الأحد الساعة 10 صباحًا في القاعة الرئيسية." },
+
+  { q: "ازاي أسلّم الواجب؟",
+    a: "ارفع الواجب على المنصة قبل يوم الجمعة الساعة 11 مساءً." },
+
+  { q: "إيه المطلوب في الامتحان؟",
+    a: "الامتحان على الوحدات من الأولى للثالثة.\nراجع الملخصات والأمثلة اللي اتشرحت في المحاضرات." },
+
+  { q: "ازاي أتواصل مع المعلمة؟",
+    a: "تقدر تبعت رسالة على جروب الفصل في أي وقت، وهيتم الرد خلال 24 ساعة." },
+
+  { q: "فيه فيديو يشرح الدرس؟",
+    a: "أيوه، شاهد الشرح من هنا:\nhttps://www.youtube.com/watch?v=ضعي_كود_الفيديو_هنا" },
+
+  { q: "فين ألاقي ملفات المحاضرات؟",
+    a: "كل الملفات موجودة على المنصة في قسم (المواد التعليمية)." }
+];
+
+/* ============================================================
+   من هنا لتحت ما تغيريش حاجة
+   ============================================================ */
+
+const chat = document.getElementById("chat");
+const buttons = document.getElementById("buttons");
+document.getElementById("title").textContent = TITLE;
+document.title = TITLE;
+
+// يحول رابط يوتيوب أو جوجل درايف لرابط تضمين، ولو الرابط من موقع تاني يرجع null
+function getEmbedUrl(url) {
+  let m = url.match(/youtube\.com\/watch\?(?:[^\s]*&)?v=([\w-]{11})/) ||
+          url.match(/youtu\.be\/([\w-]{11})/) ||
+          url.match(/youtube\.com\/(?:shorts|embed|live)\/([\w-]{11})/);
+  if (m) return "https://www.youtube-nocookie.com/embed/" + m[1];
+  m = url.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
+  if (m) return "https://drive.google.com/file/d/" + m[1] + "/preview";
+  return null;
+}
+
+function addMessage(text, who) {
+  const div = document.createElement("div");
+  div.className = "msg " + who;
+  // أي رابط يبدأ بـ http أو https يتحول لرابط قابل للضغط
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  parts.forEach(function (part) {
+    if (/^https?:\/\//.test(part)) {
+      const embed = getEmbedUrl(part);
+      if (embed) {
+        // فيديو يوتيوب أو درايف: يشتغل جوه المحادثة
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "position:relative;width:100%;max-width:420px;aspect-ratio:16/9;margin:8px 0;";
+        const frame = document.createElement("iframe");
+        frame.src = embed;
+        frame.allowFullscreen = true;
+        frame.setAttribute("allow", "accelerometer; autoplay; encrypted-media; picture-in-picture; fullscreen");
+        frame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:10px;";
+        wrap.appendChild(frame);
+        div.appendChild(wrap);
+        const link = document.createElement("a");
+        link.href = part;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "فتح الفيديو في صفحة جديدة";
+        link.style.cssText = "font-size:14px;color:#1d4ed8;";
+        div.appendChild(link);
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = part;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "▶ اضغط هنا لفتح الرابط";
+      a.style.color = (who === "user") ? "#fff" : "#1d4ed8";
+      a.style.fontWeight = "bold";
+      div.appendChild(a);
+    } else {
+      div.appendChild(document.createTextNode(part));
+    }
+  });
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+let studentName = "";
+
+function showWelcome() {
+  chat.innerHTML = "";
+  addMessage((studentName ? "أهلًا يا " + studentName + "! " : "") + WELCOME, "bot");
+}
+
+// تسجيل الاسم في جوجل شيت (بيشتغل بس لو حطيتي SCRIPT_URL)
+function sendName(name) {
+  if (!SCRIPT_URL) return;
+  try {
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      body: new URLSearchParams({ name: name })
+    });
+  } catch (e) {}
+}
+
+function startApp() {
+  const gate = document.getElementById("gate");
+  if (!ASK_NAME) { showWelcome(); return; }
+
+  let saved = "";
+  try { saved = localStorage.getItem("studentName") || ""; } catch (e) {}
+  if (saved) { studentName = saved; showWelcome(); return; }
+
+  gate.style.display = "flex";
+  const input = document.getElementById("nameInput");
+  const err = document.getElementById("nameErr");
+  function submit() {
+    const n = input.value.trim();
+    if (n.length < 3) { err.textContent = "من فضلك اكتب اسمك"; return; }
+    studentName = n;
+    try { localStorage.setItem("studentName", n); } catch (e) {}
+    sendName(n);
+    gate.style.display = "none";
+    showWelcome();
+  }
+  document.getElementById("nameBtn").onclick = submit;
+  input.onkeydown = function (ev) { if (ev.key === "Enter") submit(); };
+  input.focus();
+}
+
+FAQ.forEach(function (item) {
+  const b = document.createElement("button");
+  b.className = "q-btn";
+  b.textContent = item.q;
+  b.onclick = function () {
+    addMessage(item.q, "user");
+    setTimeout(function () { addMessage(item.a, "bot"); }, 300);
+  };
+  buttons.appendChild(b);
+});
+
+document.getElementById("reset").onclick = showWelcome;
+startApp();
+</script>
+
+</body>
+</html>
